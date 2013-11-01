@@ -30,7 +30,7 @@
  * $Id: proto_manager.cc 133 2012-11-04 21:03:53Z salcock $
  */
 
-#include "config.h"
+//#include "config.h"
 
 #include <glob.h>
 #include <dlfcn.h>

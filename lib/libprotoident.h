@@ -37,6 +37,9 @@
 #include <libtrace.h>
 #include <pthread.h>
 #include <list>
+#include <stdint.h>
+#include <netinet/in.h>
+
 
 #if __GNUC__ >= 3 
 #  define DEPRECATED __attribute__((deprecated))
@@ -477,7 +480,7 @@ void lpi_init_data(lpi_data_t *data);
  *
  *  @return 0 if the packet was ignored, 1 if the LPI data was updated.
  */
-int lpi_update_data(libtrace_packet_t *packet, lpi_data_t *data, uint8_t dir);
+//int lpi_update_data(libtrace_packet_t *packet, lpi_data_t *data, uint8_t dir);
 
 /** Returns a unique string describing the provided protocol.
  *
@@ -541,6 +544,35 @@ lpi_module_t *lpi_guess_protocol(lpi_data_t *data);
  *  to avoid reporting anything for the NULL protocols.
  */
 bool lpi_is_protocol_inactive(lpi_protocol_t proto);
+
+/** Shim for lpi_guess_protocol() such that it can be used by Python.
+ *
+ *  @note Client and server are actually unimportant, but handy to be respected.
+ *
+ *  @param client_payload The first four bytes of payload from the client.
+ *  @param server_payload The first four bytes of payload from the server.
+ *  @param client_ip The IP of the client packed as an INT
+ *  @param server_ip The IP of the server packed as an INT
+ *  @param client_port The port number from the client.
+ *  @param server_port The port number from the client.
+ *  @param client_payload_length Length of the first payload from the client.
+ *  @param server_payload_length Length of the first payload from the server.
+ *  @param protocol The IP protocol field. Only those supposed are in 
+ *  lpi_ipprotocol_t
+ *
+ *  @return char* Returns a string that represents the category. see the function
+ *  lpi_print_category.
+ */
+const char* lpi_shim_guess_protocol(unsigned int client_payload,
+				    unsigned int server_payload,
+				    unsigned int client_ip,
+				    unsigned int server_ip,
+				    unsigned int client_port,
+				    unsigned int server_port,
+				    unsigned int client_payload_length,
+				    unsigned int server_payload_length,
+				    char protocol);
+
 #ifdef __cplusplus 
 }
 #endif

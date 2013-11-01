@@ -1,7 +1,7 @@
 #ifndef TCP_PROTOCOLS_H_
 #define TCP_PROTOCOLS_H_
 
-#include "proto_manager.h"
+#include "../proto_manager.h"
 
 void register_afp(LPIModuleMap *mod_map);
 void register_akamai_tcp(LPIModuleMap *mod_map);

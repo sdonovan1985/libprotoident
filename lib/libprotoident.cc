@@ -35,7 +35,7 @@
 
 #include <stdio.h>
 #include <assert.h>
-#include <libtrace.h>
+//#include <libtrace.h>
 #include <inttypes.h>
 #include <sys/types.h>
 #include <stdint.h>
@@ -56,20 +56,6 @@ lpi_module_t *lpi_unknown_tcp = NULL;
 lpi_module_t *lpi_unknown_udp = NULL;
 
 static LPINameMap lpi_names;
-
-static int seq_cmp (uint32_t seq_a, uint32_t seq_b) {
-
-        if (seq_a == seq_b) return 0;
-
-
-        if (seq_a > seq_b)
-                return (int)(seq_a - seq_b);
-        else
-                /* WRAPPING */
-                return (int)(UINT32_MAX - ((seq_b - seq_a) - 1));
-
-}
-
 
 int lpi_init_library() {
 
@@ -124,125 +110,6 @@ void lpi_init_data(lpi_data_t *data) {
 	data->payload_len[1] = 0;
 	data->ips[0] = 0;
 	data->ips[1] = 0;
-
-}
-
-static int update_tcp_flow(lpi_data_t *data, libtrace_tcp_t *tcp, uint8_t dir,
-		uint32_t rem) {
-	uint32_t seq = 0;
-
-	if (rem < sizeof(libtrace_tcp_t))
-		return 0;
-	if (tcp->rst)
-		return 1;
-	
-	if (data->server_port == 0) {
-		data->server_port = ntohs(tcp->dest);
-		data->client_port = ntohs(tcp->source);
-	}
-
-	seq = ntohl(tcp->seq);
-
-	if (tcp->syn && data->payload_len[dir] == 0) {
-		data->seqno[dir] = seq + 1;
-	}
-
-	if (seq_cmp(seq, data->seqno[dir]) > 0)
-		return 0;
-	//data->seqno[dir] = seq;
-
-	return 1;
-}
-
-static int update_udp_flow(lpi_data_t *data, libtrace_udp_t *udp,
-		uint32_t rem) {
-
-	if (rem < sizeof(libtrace_udp_t))
-		return 0;
-	
-	if (data->server_port == 0) {
-		data->server_port = ntohs(udp->dest);
-		data->client_port = ntohs(udp->source);
-	}
-
-	return 1;
-}
-
-int lpi_update_data(libtrace_packet_t *packet, lpi_data_t *data, uint8_t dir) {
-
-	char *payload = NULL;
-	uint32_t psize = 0;
-	uint32_t rem = 0;
-	uint8_t proto = 0;
-	void *transport;
-	uint32_t four_bytes;
-	libtrace_ip_t *ip = NULL;
-
-	//tcp = trace_get_tcp(packet);
-	psize = trace_get_payload_length(packet);
-
-	/* Don't bother if we've observed 32k of data - the first packet must
-	 * surely been within that. This helps us avoid issues with sequence
-	 * number wrapping when doing the reordering check below */
-	if (data->observed[dir] > 32 * 1024)
-		return 0;
-	
-	data->observed[dir] += psize;
-	
-	/* If we're TCP, we have to wait to check that we haven't been
-	 * reordered */
-	if (data->trans_proto != 6 && data->payload_len[dir] != 0)
-		return 0;
-	
-	transport = trace_get_transport(packet, &proto, &rem);
-	if (data->trans_proto == 0)
-		data->trans_proto = proto;
-	
-	if (transport == NULL || rem == 0)
-		return 0;		
-
-	if (proto == 6) {
-		if (update_tcp_flow(data, (libtrace_tcp_t *)transport, dir, rem) == 0) 
-			return 0;
-		payload = (char *)trace_get_payload_from_tcp(
-				(libtrace_tcp_t *)transport, &rem);
-	} 
-
-	if (proto == 17) {
-		if (update_udp_flow(data, (libtrace_udp_t *)transport, rem) == 0)
-			return 0;
-		payload = (char *)trace_get_payload_from_udp(
-				(libtrace_udp_t *)transport, &rem);
-	}
-
-	ip = trace_get_ip(packet);
-	
-	if (payload == NULL)
-		return 0;
-	if (psize <= 0)
-		return 0;
-
-	four_bytes = (*(uint32_t *)payload);
-	
-	if (psize < 4) {
-		four_bytes = (ntohl(four_bytes)) >> (8 * (4 - psize));		
-		four_bytes = htonl(four_bytes << (8 * (4 - psize)));		
-	}
-
-	data->payload[dir] = four_bytes;
-	data->payload_len[dir] = psize;
-
-	if (ip != NULL && data->ips[0] == 0) {
-		if (dir == 0) {
-			data->ips[0] = ip->ip_src.s_addr;
-			data->ips[1] = ip->ip_dst.s_addr;
-		} else {
-			data->ips[1] = ip->ip_src.s_addr;
-			data->ips[0] = ip->ip_dst.s_addr;
-		}
-	}
-
-	return 1;
 
 }
 
@@ -448,3 +315,34 @@ bool lpi_is_protocol_inactive(lpi_protocol_t proto) {
 
 }
 
+const char* lpi_shim_guess_protocol(unsigned int client_payload,
+				    unsigned int server_payload,
+				    unsigned int client_ip,
+				    unsigned int server_ip,
+				    unsigned int client_port,
+				    unsigned int server_port,
+				    unsigned int client_payload_length,
+				    unsigned int server_payload_length,
+				    char protocol)
+{
+    lpi_data_t data;
+    lpi_module_t* module;
+
+    lpi_init_data(&data);
+
+    data.payload[0]     = client_payload;
+    data.client_port    = client_port;
+    data.payload_len[0] = client_payload_length;
+    data.ips[0]         = client_ip;
+
+    data.payload[1]     = server_payload;
+    data.server_port    = server_port;
+    data.payload_len[1] = server_payload_length;
+    data.ips[1]         = server_ip;
+
+    data.trans_proto    = protocol;
+
+    module = lpi_guess_protocol(&data);
+
+    return (lpi_print_category(lpi_categorise(module)));    
+}

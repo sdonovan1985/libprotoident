@@ -1,7 +1,7 @@
 #ifndef UDP_PROTOCOLS_H_
 #define UDP_PROTOCOLS_H_
 
-#include "proto_manager.h"
+#include "../proto_manager.h"
 
 void register_akamai(LPIModuleMap *mod_map);
 void register_akamai_transfer(LPIModuleMap *mod_map);
