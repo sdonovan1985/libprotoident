@@ -1,3 +1,14 @@
+This is a heavily hacked apart version of libprotoident that has been 
+changed to be easily wrappable in Python. Much of the codebase was stripped
+away in order to simplify what is actually needed. Namely, the library does
+not need libtrace or libflowmanager any more to be built or run. 
+
+The wrapping was accomplished by using the swig library 
+(http://www.swig.org/), which is now required.
+
+
+---------------------------------------------------------------------------
+
 libprotoident 2.0.6
 
 ---------------------------------------------------------------------------
